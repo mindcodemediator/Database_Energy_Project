@@ -30,24 +30,23 @@ def getSalesQuery():
         )"""
 
 def displaySales(connection):
-    #st.write('Sales')
+
 
     #State & county select
     dfStateSales = pd.read_sql(getStates(), con = connection)
     state_select_sales = st.selectbox('Select the state:', dfStateSales['STATE'], key='stateSalesSelect')
     dfCountySales = pd.read_sql(getCounties(), con = connection, params=[state_select_sales])
-    county_select_sales= st.selectbox('Select the county', dfCountySales['COUNTY'], key='countySalesSelect')
+    county_select_sales= st.selectbox('Select the county:', dfCountySales['COUNTY'], key='countySalesSelect')
 
     # read in sales query
     dfStateSales = pd.read_sql(getSalesQuery(), con=connection, params=[state_select_sales, county_select_sales])
-    dfStateSales.columns = ('location', 'year', 'avg_rev')
-
+    dfStateSales.columns = (' ', 'Year', '$/MWh')
     # bar chart
     bc_sales = alt.Chart(dfStateSales).mark_bar().encode(
-        x='location:N',
-        y='avg_rev:Q',
-        color='location:N',
-        column='year:O'
+        x=' :N',
+        y='$/MWh:Q',
+        color=' :N',
+        column='Year:O'
     )
 
     return bc_sales

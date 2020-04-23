@@ -122,16 +122,16 @@ def getFuelTrend(connection, fuelTypes):
     # query
     query = getFuelQuery(yesSQL, noSQL)
     dfFuel = pd.read_sql(query, con=connection)
-    dfFuel.columns = ('code', 'year', 'month', 'count')
-    dfFuel['date'] = pd.to_datetime(dfFuel[['year', 'month']].assign(day=1))
+    dfFuel.columns = ('Fuel', 'year', 'month', '# of Utilities')
+    dfFuel['Date'] = pd.to_datetime(dfFuel[['year', 'month']].assign(day=1))
 
     lcFuel = alt.Chart(dfFuel).mark_line().encode(
-        alt.Y('count:Q', scale=alt.Scale(zero=False)),
-        x = 'yearmonth(date):O',
-        color='code'
+        alt.Y('# of Utilities:Q', scale=alt.Scale(zero=False)),
+        x = 'yearmonth(Date):O',
+        color='Fuel'
     ).properties(
         width=700,
         height=400
     )
-    st.write('Amount of utilities using each fuel Exclusively')
+
     return lcFuel, query

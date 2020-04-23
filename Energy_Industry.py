@@ -30,7 +30,7 @@ def getFuelTrendCall():
     fuelTypes = st.multiselect('Select Fuel Type',
                                        ('Solar', 'Geothermal', 'Coal', 'Natural Gas', 'Nuclear', 'Wind'), 'Solar')
     # if st.button('Get Fuel Trends'):
-    st.subheader('Fuel Trends')
+    st.subheader('Number of Utilities that use a Given Fuel Exclusively')
     if len(fuelTypes) >= 1:
         (chart, query) = getFuelTrend(connection, fuelTypes)
         st.altair_chart(chart)
@@ -45,7 +45,7 @@ def displayCO2Call():
     connection = cx_Oracle.connect("vprater", userpwd, dsn, encoding="UTF-8")
 
     # display
-    st.subheader('CO2 changes for the better and worst')
+    st.subheader('Best/Worst CO2 Emissions Net Change')
     # QUERY FOR CO2 for five best and five worst over one year
     display_order = st.selectbox("", ('Five best states', 'Five worst states'))
     if display_order == 'Five best states':
@@ -53,8 +53,8 @@ def displayCO2Call():
     elif display_order == 'Five worst states':
         setChart = """desc"""
 
-    year_select = st.selectbox('for CO2 output improvement year start', ('2013', '2014', '2015', '2016', '2017'))
-    year_select2 = st.selectbox('for CO2 output improvement year end', ('2014', '2015', '2016', '2017', '2018'))
+    year_select = st.selectbox('Comparison- Year Start:', ('2013', '2014', '2015', '2016', '2017'))
+    year_select2 = st.selectbox('Comparison- Year End:', ('2014', '2015', '2016', '2017', '2018'))
     # show all years
     chartone = displayCO2(connection, setChart, int(year_select),int(year_select2), True)
     # show time selected
@@ -71,22 +71,37 @@ def displayCO2byStateCall():
     connection = cx_Oracle.connect("vprater", userpwd, dsn, encoding="UTF-8")
 
     # display
-    st.subheader('CO2 by state')
+    st.subheader('State CO2 Emissions Comparison Tool')
     # QUERY FOR CO2 by state
 
-    stateCO2_start_year = st.selectbox('From', ('2013', '2014', '2015', '2016', '2017'))
-    stateCO2_end_year = st.selectbox('To', ('2014', '2015', '2016', '2017', '2018'), 4)
-
+    st.markdown('**Select Year Range**')
+    stateCO2_start_year = st.selectbox('Start Year', ('2013', '2014', '2015', '2016', '2017'))
+    stateCO2_end_year = st.selectbox('End Year', ('2014', '2015', '2016', '2017', '2018'), 4)
+    st.markdown('**Select States to Compare**')
     stateCO2_state1 = st.selectbox('State 1', states, 1)
     stateCO2_state2 = st.selectbox('State 2', states)
     stateCO2_state3 = st.selectbox('State 3', states)
     stateCO2_state4 = st.selectbox('State 4', states)
     stateCO2_state5 = st.selectbox('State 5', states)
 
-    chart = displayCO2byState(connection, stateCO2_start_year, stateCO2_end_year,
+    chartone = displayCO2byState(connection, stateCO2_start_year, stateCO2_end_year,
                               stateCO2_state1, stateCO2_state2, stateCO2_state3,
                               stateCO2_state4, stateCO2_state5)
-    st.altair_chart(chart)
+
+    charttwo = displayNormalizedCO2(connection, stateCO2_start_year, stateCO2_end_year,
+                                 stateCO2_state1, stateCO2_state2, stateCO2_state3,
+                                 stateCO2_state4, stateCO2_state5)
+
+
+    st.markdown('**Gross Tons CO2 Produced**')
+    st.altair_chart(chartone)
+    st.markdown('**Normalized Lbs CO2 Produced**')
+    st.altair_chart(charttwo)
+
+    map_year = st.selectbox('Select Year for CO2 Map', ('2013', '2014', '2015', '2016', '2017', '2018'))
+    st.markdown('**Normalized Lbs CO2 Produced Choropleth Map**')
+    chartthree = makeMeAFreakingMap(connection, map_year)
+    st.altair_chart(chartthree)
 
     # cleanup
     connection.close()
@@ -97,7 +112,7 @@ def displayReliabilityCall():
     connection = cx_Oracle.connect("vprater", userpwd, dsn, encoding="UTF-8")
 
     # display
-    st.subheader('Reliability Trends')
+    st.subheader('Outage Trends (With and Without Major Events)')
     chart = displayReliability(connection)
     st.altair_chart(chart)
 
@@ -110,7 +125,7 @@ def displaySalesCall():
     connection = cx_Oracle.connect("vprater", userpwd, dsn, encoding="UTF-8")
 
     # display
-    st.subheader('Sales Trends')
+    st.subheader('Residential Power Revenue per County')
     chart = displaySales(connection)
     st.altair_chart(chart)
 

@@ -30,20 +30,26 @@ def displayReliability(connection):
     dfState = pd.read_sql(getStates(), con = connection)
     state_select = st.selectbox('Select the state:', dfState['STATE'])
     dfCounty = pd.read_sql(getCounties(), con = connection, params=[state_select])
-    county_select= st.selectbox('Select the county', dfCounty['COUNTY'])
+    county_select= st.selectbox('Select the county:', dfCounty['COUNTY'])
 
     #read in reliability query
     df = pd.read_sql(getReliabilityQuery(), con = connection, params=[state_select, county_select])
-    df_melted = df.melt(id_vars = [df.columns[0]], value_vars = [df.columns[1], df.columns[2]])
 
+    df.columns = ('Year', 'Including Disasters', 'Excluding Disasters')
+
+    df_melted = df.melt(id_vars = [df.columns[0]], value_vars = [df.columns[1], df.columns[2]])
+    df_melted.columns =('Year', ' ', 'Average Minutes w/o Electricity per Customer')
     #bar chart
     #st.write(df_melted)
     bc = alt.Chart(df_melted).mark_bar().encode(
-        x=df.columns[0] + ':O',
-        y= 'value:Q',
-        color='variable:N'
-    ).properties(
-        width=600,
-        height=400
+        x=' :N',
+        y='Average Minutes w/o Electricity per Customer:Q',
+        color= ' :N',
+        column='Year:O',
     )
+    text = bc.mark_text(
+    ).encode(
+        text=''
+    )
+
     return bc

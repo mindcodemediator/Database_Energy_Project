@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
+from vega_datasets import data
 
 @st.cache
 def getCO2Query(order):
@@ -46,7 +47,7 @@ def getCO2Query(order):
                                 from JOLIU.plant
                                 inner join JOLIU.territory using(util_id)
                                 inner join JOLIU.emissions using(plant_id)
-                                where (JOLIU.emissions.year = :diff_year)
+                                where (JOLIU.emissions.year = :start_year)
                                 )
                             group by s, y
                             )
@@ -75,15 +76,15 @@ def displayCO2(connection, order, year, endyear, allyears):
 
 
     df = pd.read_sql(getCO2Query(order), con = connection, params = [endyear, year, start, end])
-    df.columns = ('terr_state', 'year', 'total_co2')
-    df['total_co2'] = df.apply(
-        lambda row: row['total_co2'] / 1000000000, axis = 1
+    df.columns = ('State', 'Year', 'CO2, Trillions of Tons')
+    df['CO2, Trillions of Tons'] = df.apply(
+        lambda row: row['CO2, Trillions of Tons'] / 1000000000, axis = 1
     )
 
     lc = alt.Chart(df).mark_line().encode(
-    alt.Y('total_co2:Q', scale=alt.Scale(zero=False)),
-    x = 'year:O',
-    color = 'terr_state:N'
+    alt.Y('CO2, Trillions of Tons:Q', scale=alt.Scale(zero=False)),
+    x = 'Year:O',
+    color = 'State:N'
     ).properties(
         width=600,
         height=400
@@ -95,27 +96,71 @@ def displayCO2(connection, order, year, endyear, allyears):
 
 @st.cache
 def getCO2State(states):
-    return """
-       SELECT s, y, SUM(c) as total FROM
-       (
-           SELECT  DISTINCT JOLIU.emissions.year AS y,
-                   plant_id,
-                   util_id,
-                   JOLIU.territory.state AS s,
-                   JOLIU.emissions.tons_co2 AS c
-           FROM JOLIU.plant
-           INNER JOIN JOLIU.territory USING(util_id)
-           INNER JOIN JOLIU.emissions USING(plant_id)
-           WHERE
-           (
-               (JOLIU.emissions.year >= :starting_year AND JOLIU.emissions.year <= :ending_year) AND
-               (
-                  """ + states + """
-               )
-           )    
-       )
-       GROUP BY s, y
-       ORDER BY s ASC, y DESC"""
+    return"""
+        SELECT s, sn, y , SUM(c) 
+ FROM
+
+(
+
+SELECT JOLIU.emissions.year AS y,
+
+JOLIU.emissions.plant_id,
+
+util_id,
+
+county,
+
+state AS s,
+
+state_name AS sn,
+
+tons_co2 AS c
+
+FROM JOLIU.emissions
+
+INNER JOIN JOLIU.transmits_pwr_to ON
+
+(
+
+JOLIU.emissions.year = JOLIU.transmits_pwr_to.year AND
+
+JOLIU.emissions.plant_id = JOLIU.transmits_pwr_to.plant_id
+
+)
+
+INNER JOIN JOLIU.territory USING(util_id)
+
+INNER JOIN JOLIU.state_abbv USING (state)
+
+WHERE
+
+(
+
+(
+
+JOLIU.emissions.year >= :startyear AND
+
+JOLIU.emissions.year <= :endyear
+
+)
+
+AND
+
+(
+
+""" + states + """
+
+)
+
+)
+
+)
+
+GROUP BY s, sn, y
+
+ORDER BY s ASC, y DESC"""
+
+
 
 
 def displayCO2byState(connection, year_start, year_end, state1, state2, state3, state4, state5):
@@ -124,15 +169,15 @@ def displayCO2byState(connection, year_start, year_end, state1, state2, state3, 
 
     state_sql = """"""
     if state1 != """""":
-        state_sql += """JOLIU.territory.state = '""" + state1 + """' OR """
+        state_sql += """state = '""" + state1 + """' OR """
     if state1 != """""":
-        state_sql += """JOLIU.territory.state = '""" + state2 + """' OR """
+        state_sql += """state = '""" + state2 + """' OR """
     if state1 != """""":
-        state_sql += """JOLIU.territory.state = '""" + state3 + """' OR """
+        state_sql += """state = '""" + state3 + """' OR """
     if state1 != """""":
-        state_sql += """JOLIU.territory.state = '""" + state4 + """' OR """
+        state_sql += """state = '""" + state4 + """' OR """
     if state1 != """""":
-        state_sql += """JOLIU.territory.state = '""" + state5 + """'"""
+        state_sql += """state = '""" + state5 + """'"""
 
     if state_sql == """""":
         return
@@ -143,14 +188,276 @@ def displayCO2byState(connection, year_start, year_end, state1, state2, state3, 
         del state_sql[-1]
 
     df = pd.read_sql(getCO2State(state_sql), con=connection, params=[year_start, year_end])
-    df.columns = ('state', 'year', 'total')
+    df.columns = ('StateAb', 'State', 'Year', 'CO2, Trillions of Tons')
+
+    df['CO2, Trillions of Tons'] = df.apply(
+        lambda row: row['CO2, Trillions of Tons'] / 1000000000, axis = 1
+    )
 
     lc = alt.Chart(df).mark_line().encode(
-        alt.Y('total:Q', scale=alt.Scale(zero=False)),
-        alt.X('year:O', scale=alt.Scale(zero=False)),
-        color='state:N'
+        alt.Y('CO2, Trillions of Tons', scale=alt.Scale(zero=False)),
+        alt.X('Year:O', scale=alt.Scale(zero=False)),
+        color='State:N'
     ).properties(
         width=600,
         height=400
     )
     return lc
+
+
+def getNormalizedCO2(states):
+    return """
+    SELECT s, sn, y,
+
+TRUNC(SUM(c)/1000000, 0) AS "Millions Metric Tons CO2 Produced",
+
+TRUNC(SUM(m)/1000000, 0) AS "Millions MWh Generated",
+
+TRUNC((SUM(c)/SUM(m))*2204.62, 0) AS "Lbs CO2/MWh" FROM
+
+(
+
+SELECT JOLIU.emissions.year AS y,
+
+JOLIU.emissions.plant_id,
+
+util_id,
+
+county,
+
+state AS s,
+
+state_name AS sn,
+
+tons_co2 AS c,
+
+tot_mwh_gen AS m
+
+FROM JOLIU.emissions
+
+INNER JOIN JOLIU.transmits_pwr_to ON
+
+(
+
+JOLIU.emissions.year = JOLIU.transmits_pwr_to.year AND
+
+JOLIU.emissions.plant_id = JOLIU.transmits_pwr_to.plant_id
+
+)
+
+INNER JOIN
+
+(
+
+SELECT year, plant_id AS mpc_pid,
+
+SUM(MWh_gen) as tot_mwh_gen FROM
+
+(
+
+SELECT * FROM JOLIU.mo_prod_consum
+
+UNION
+
+SELECT * FROM CBOGER.mo_prod_consum
+
+)
+
+GROUP BY year, plant_id
+
+)
+
+ON (mpc_pid = JOLIU.emissions.plant_id)
+
+INNER JOIN JOLIU.territory USING(util_id)
+
+INNER JOIN JOLIU.state_abbv USING (state)
+
+WHERE
+
+(
+
+(
+
+JOLIU.emissions.year >= :startyear AND
+
+JOLIU.emissions.year <= :endyear
+
+)
+
+AND
+
+(
+
+""" + states + """
+
+)
+
+)
+
+)
+
+GROUP BY s, sn, y
+
+ORDER BY s ASC, y DESC
+    """
+
+
+def displayNormalizedCO2(connection, year_start, year_end, state1, state2, state3, state4, state5):
+    # open connection
+
+
+    state_sql = """"""
+    if state1 != """""":
+        state_sql += """state = '""" + state1 + """' OR """
+    if state1 != """""":
+        state_sql += """state = '""" + state2 + """' OR """
+    if state1 != """""":
+        state_sql += """state = '""" + state3 + """' OR """
+    if state1 != """""":
+        state_sql += """state = '""" + state4 + """' OR """
+    if state1 != """""":
+        state_sql += """state = '""" + state5 + """'"""
+
+    if state_sql == """""":
+        return
+
+    if state_sql[-3] == 'O' and state_sql[-2] == 'R' and state_sql[-1] == ' ':
+        del state_sql[-3]
+        del state_sql[-2]
+        del state_sql[-1]
+
+    df = pd.read_sql(getNormalizedCO2(state_sql), con=connection, params=[year_start, year_end])
+    df.columns = ('StateAb', 'State', 'Year', 'x', 'y', 'Lbs CO2/MWh')
+
+
+
+    lc = alt.Chart(df).mark_line().encode(
+        alt.Y('Lbs CO2/MWh', scale=alt.Scale(zero=False)),
+        alt.X('Year:O', scale=alt.Scale(zero=False)),
+        color='State:N'
+    ).properties(
+        width=600,
+        height=400
+    )
+    return lc
+
+
+
+def mapQuery():
+    return """
+    SELECT ROW_NUMBER() over (ORDER BY s) id,
+
+TRUNC(SUM(c)/1000000, 0) AS "Millions Metric Tons CO2 Produced",
+
+TRUNC(SUM(m)/1000000, 0) AS "Millions MWh Generated",
+
+TRUNC((SUM(c)/SUM(m))*2204.62, 0) AS "Lbs CO2/MWh" FROM
+
+(
+
+SELECT JOLIU.emissions.year AS y,
+
+JOLIU.emissions.plant_id,
+
+util_id,
+
+county,
+
+state AS s,
+
+state_name AS sn,
+
+tons_co2 AS c,
+
+tot_mwh_gen AS m
+
+FROM JOLIU.emissions
+
+INNER JOIN JOLIU.transmits_pwr_to ON
+
+(
+
+JOLIU.emissions.year = JOLIU.transmits_pwr_to.year AND
+
+JOLIU.emissions.plant_id = JOLIU.transmits_pwr_to.plant_id
+
+)
+
+INNER JOIN
+
+(
+
+SELECT year, plant_id AS mpc_pid,
+
+SUM(MWh_gen) as tot_mwh_gen FROM
+
+(
+
+SELECT * FROM JOLIU.mo_prod_consum
+
+UNION
+
+SELECT * FROM CBOGER.mo_prod_consum
+
+)
+
+GROUP BY year, plant_id
+
+)
+
+ON (mpc_pid = JOLIU.emissions.plant_id)
+
+INNER JOIN JOLIU.territory USING(util_id)
+
+INNER JOIN JOLIU.state_abbv USING (state)
+
+WHERE
+
+(
+
+(
+
+JOLIU.emissions.year = :mapyear
+
+)
+
+AND
+
+(
+
+state != 'DC'
+
+)
+
+)
+
+)
+
+GROUP BY s, sn, y
+
+ORDER BY s ASC, y DESC
+    """
+
+
+
+
+def makeMeAFreakingMap(connection, year_start):
+    df = pd.read_sql(mapQuery(), con=connection, params=[year_start])
+    df.columns = ('id', 'x', 'y', 'Lbs CO2/MWh')
+
+    states = alt.topo_feature(data.us_10m.url, 'states')
+    #st.write(df)
+    map = alt.Chart(states).mark_geoshape().encode(
+        color='Lbs CO2/MWh:Q'
+    ).transform_lookup(
+        lookup='id',
+        from_=alt.LookupData(df, 'id', ['Lbs CO2/MWh'])
+    ).project(
+        type='albersUsa'
+    ).properties(
+        width=500,
+        height=300
+    )
+
+    return map
